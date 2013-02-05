@@ -60,7 +60,7 @@ set PROJECT(SCEMI_TB_CC_LINK) "g++ -o scemirun TESTBENCH.o -L\$SYSTEMC/lib-linux
 set PROJECT(SCEMI_TB_CC_RUN) "./scemirun"
 set PROJECT(SIM_CUSTOM_COMMAND) ""
 set PROJECT(SIM_EXE) ""
-set PROJECT(SIM_NAME) "None Found"
+set PROJECT(SIM_NAME) "iverilog"
 set PROJECT(SIM_OPTIONS) ""
 set PROJECT(SOURCE) ""
 set PROJECT(STATUS) ""
