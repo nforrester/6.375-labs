@@ -1,6 +1,7 @@
 import FIFO::*;
 import FixedPoint::*;
 import Vector::*;
+import Counter::*;
 
 import AudioProcessorTypes::*;
 import FilterCoefficients::*;
@@ -14,7 +15,7 @@ module mkFIRFilter (AudioProcessor);
 
 	Vector#(9, Multiplier) mult <- replicateM(mkMultiplier());
 
-	Reg#(Bool) outputReady <- mkReg(False);
+	Counter#(32) outputReady <- mkCounter(0);
 
 	rule pipeIn (True);
 		$display("in sample: %h", infifo.first());
@@ -27,37 +28,29 @@ module mkFIRFilter (AudioProcessor);
 		end
 
 		mult[0].putOperands(c[0], sample);
-		for (Integer i = 0; i < 7; i = i + 1) begin
+		for (Integer i = 0; i < 8; i = i + 1) begin
 			mult[i + 1].putOperands(c[i + 1], r[i]);
 		end
 
-		outputReady <= True;
+		outputReady.up();
 		$display("Hello");
 	endrule
 
-	rule pipeOut (outputReady);
+	rule pipeOut (outputReady.value() > 0);
 		$display("World!");
-		let results0 <- mult[0].getResult();
-		let results1 <- mult[1].getResult();
-		let results2 <- mult[2].getResult();
-		let results3 <- mult[3].getResult();
-		let results4 <- mult[4].getResult();
-		let results5 <- mult[5].getResult();
-		let results6 <- mult[6].getResult();
-		let results7 <- mult[7].getResult();
-		let results8 <- mult[8].getResult();
 
-		FixedPoint#(16, 16) accumulate = results0
-		                               + results1
-		                               + results2
-		                               + results3
-		                               + results4
-		                               + results5
-		                               + results6
-		                               + results7
-		                               + results8;
+		Vector#(9, FixedPoint#(16, 16)) results;
+		for (Integer i = 0; i < 9; i = i + 1) begin
+			results[i] <- mult[i].getResult();
+		end
+
+		FixedPoint#(16, 16) accumulate = 0;
+		for (Integer i = 0; i < 9; i = i + 1) begin
+			accumulate = accumulate + results[i];
+		end
 	
 		$display("out sample: %h", accumulate);
+		outputReady.down();
 		outfifo.enq(fxptGetInt(accumulate));
 	endrule
 
