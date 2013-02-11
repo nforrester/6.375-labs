@@ -15,8 +15,6 @@ module mkFIRFilter (AudioProcessor);
 
 	Vector#(9, Multiplier) mult <- replicateM(mkMultiplier());
 
-	Counter#(32) outputReady <- mkCounter(0);
-
 	rule pipeIn (True);
 		$display("in sample: %h", infifo.first());
 		Sample sample = infifo.first();
@@ -31,14 +29,9 @@ module mkFIRFilter (AudioProcessor);
 		for (Integer i = 0; i < 8; i = i + 1) begin
 			mult[i + 1].putOperands(c[i + 1], r[i]);
 		end
-
-		outputReady.up();
-		$display("Hello");
 	endrule
 
-	rule pipeOut (outputReady.value() > 0);
-		$display("World!");
-
+	rule pipeOut (True);
 		Vector#(9, FixedPoint#(16, 16)) results;
 		for (Integer i = 0; i < 9; i = i + 1) begin
 			results[i] <- mult[i].getResult();
@@ -50,7 +43,6 @@ module mkFIRFilter (AudioProcessor);
 		end
 	
 		$display("out sample: %h", accumulate);
-		outputReady.down();
 		outfifo.enq(fxptGetInt(accumulate));
 	endrule
 
@@ -63,4 +55,3 @@ module mkFIRFilter (AudioProcessor);
 		return outfifo.first();
 	endmethod
 endmodule
-
