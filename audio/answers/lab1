@@ -1,0 +1,21 @@
+1. The generated symbol names in verilog are all different,
+   but I think that's because they're generated pseudo-randomly
+   (or by some similar process), and are different every time.
+   There are no structural changes, and what ends up in the
+   FPGA should be precisely the same.
+
+2. You need to add 2 lines for every additional tap you want to add,
+   and change 1 additional line (a constant cost), under the old design.
+   So making it into a 16 tap filter would require another 16 lines, plus
+   a 1 line change. Making a 256 tap filter would require another 496
+   lines, plus a 1 line change. For loops can turn O(n) changes into
+   O(1) changes, so no matter how many taps you want to add, you just need
+   to change 3 lines.
+
+3. My implementation does not change. Before monday's lecture I was
+   worried about timing issues, and how long the multiplier would take
+   to complete, and I had tried to write synchronization code myself.
+   However, it turns out that every method call has a ready signal
+   associated with it, and that this is incorporated into the guards
+   for rules automatically. So I removed my synchronization code and
+   it still worked.
