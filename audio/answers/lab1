@@ -10,7 +10,8 @@
    a 1 line change. Making a 256 tap filter would require another 496
    lines, plus a 1 line change. For loops can turn O(n) changes into
    O(1) changes, so no matter how many taps you want to add, you just need
-   to change 3 lines.
+   to change a set number of lines. Using size types, this can be
+   a 1 line change.
 
 3. My implementation does not change. Before monday's lecture I was
    worried about timing issues, and how long the multiplier would take
