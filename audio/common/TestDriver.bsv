@@ -1,13 +1,13 @@
 
 import Counter::*;
 
-import FIRFilter::*;
+import AudioPipeline::*;
 import AudioProcessorTypes::*;
 
 (* synthesize *)
 module mkTestDriver (Empty);
 
-    AudioProcessor pipeline <- mkFIRFilter();
+    AudioProcessor pipeline <- mkAudioPipeline();
 
     Reg#(File) m_in <- mkRegU();
     Reg#(File) m_out <- mkRegU();
@@ -51,6 +51,14 @@ module mkTestDriver (Empty);
             pipeline.putSampleInput(unpack({b8, a8}));
             m_outstanding.up();
         end
+    endrule
+
+    (* descending_urgency="write, pad" *)
+    rule pad(m_inited && m_doneread);
+        // In case there aren't an FFT_POINTs multiple of input samples, pad
+        // the rest with zeros so eventually all the outstanding samples will
+        // drain.
+        pipeline.putSampleInput(0);
     endrule
 
     rule write(m_inited);
