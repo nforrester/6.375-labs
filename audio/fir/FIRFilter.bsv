@@ -20,7 +20,7 @@ module mkFIRFilter (AudioProcessor);
 	Vector#(NTapsP1, Multiplier) mult <- replicateM(mkMultiplier());
 
 	rule pipeIn (True);
-		$display("in sample: %h", infifo.first());
+		//$display("in sample: %h", infifo.first());
 		Sample sample = infifo.first();
 		infifo.deq();
 
@@ -46,7 +46,7 @@ module mkFIRFilter (AudioProcessor);
 			accumulate = accumulate + results[i];
 		end
 	
-		$display("out sample: %h", accumulate);
+		//$display("out sample: %h", accumulate);
 		outfifo.enq(fxptGetInt(accumulate));
 	endrule
 
