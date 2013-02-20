@@ -7,10 +7,11 @@ import Chunker::*;
 import FFT::*;
 import FIRFilter::*;
 import Splitter::*;
+import FilterCoefficients::*;
 
 module mkAudioPipeline(AudioProcessor);
 
-    AudioProcessor fir <- mkFIRFilter();
+    AudioProcessor fir <- mkFIRFilter(c);
     Chunker#(FFT_POINTS, ComplexSample) chunker <- mkChunker();
     FFT fft <- mkFFT();
     FFT ifft <- mkIFFT();

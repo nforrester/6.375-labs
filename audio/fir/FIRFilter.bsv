@@ -4,14 +4,13 @@ import Vector::*;
 import Counter::*;
 
 import AudioProcessorTypes::*;
-import FilterCoefficients::*;
 import Multiplier::*;
 
 typedef 8 NTaps;
 typedef TAdd#(NTaps, 1) NTapsP1;
 typedef TSub#(NTaps, 1) NTapsM1;
 
-module mkFIRFilter (AudioProcessor);
+module mkFIRFilter(Vector#(9, FixedPoint#(16, 16)) coeffs, AudioProcessor ifc);
 	FIFO#(Sample) infifo <- mkFIFO();
 	FIFO#(Sample) outfifo <- mkFIFO();
 
@@ -29,9 +28,9 @@ module mkFIRFilter (AudioProcessor);
 			r[i + 1] <= r[i];
 		end
 
-		mult[0].putOperands(c[0], sample);
+		mult[0].putOperands(coeffs[0], sample);
 		for (Integer i = 0; i < valueof(NTaps); i = i + 1) begin
-			mult[i + 1].putOperands(c[i + 1], r[i]);
+			mult[i + 1].putOperands(coeffs[i + 1], r[i]);
 		end
 	endrule
 
