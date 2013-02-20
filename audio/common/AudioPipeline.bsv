@@ -13,8 +13,8 @@ module mkAudioPipeline(AudioProcessor);
 
     AudioProcessor fir <- mkFIRFilter(c);
     Chunker#(FFT_POINTS, ComplexSample) chunker <- mkChunker();
-    FFT fft <- mkFFT();
-    FFT ifft <- mkIFFT();
+    FFT#(FFT_POINTS) fft <- mkFFT();
+    FFT#(FFT_POINTS) ifft <- mkIFFT();
     Splitter#(FFT_POINTS, ComplexSample) splitter <- mkSplitter();
 
     rule fir_to_chunker (True);
