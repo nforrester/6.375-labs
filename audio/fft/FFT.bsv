@@ -130,7 +130,7 @@ endmodule
 
 // Wrapper around The FFT module we actually want to use
 module mkFFT (FFT);
-    FFT fft <- mkLinearFFT();
+    FFT fft <- mkCircularFFT();
 
     interface Put request = fft.request;
     interface Get response = fft.response;
@@ -181,7 +181,6 @@ module mkLinearFFT (FFT);
 
 	Vector#(TAdd#(1, FFT_LOG_POINTS), FIFO#(Vector#(FFT_POINTS, ComplexSample))) stageFIFO <- replicateM(mkFIFO());
 
-	// This rule performs a stage of fft using a big mass of combinational logic.
 	for(Integer stage = 0; stage < valueof(FFT_LOG_POINTS); stage = stage + 1) begin
 		rule fft_stage;
 			stageFIFO[stage+1].enq(stage_f(fromInteger(stage), stageFIFO[stage].first()));
@@ -196,4 +195,39 @@ module mkLinearFFT (FFT);
 	endinterface
 
 	interface Get response = toGet(stageFIFO[valueof(FFT_LOG_POINTS)]);
+endmodule
+
+module mkCircularFFT (FFT);
+	// Statically generate the twiddle factors table.
+	TwiddleTable twiddles = genTwiddles();
+
+	// Define the stage_f function which uses the generated twiddles.
+	function Vector#(FFT_POINTS, ComplexSample) stage_f(Bit#(TLog#(FFT_LOG_POINTS)) stage, Vector#(FFT_POINTS, ComplexSample) stage_in);
+		return stage_ft(twiddles, stage, stage_in);
+	endfunction
+
+	Reg#(Bool) done <- mkReg(True);
+	Reg#(Bit#(TLog#(FFT_LOG_POINTS))) stage <- mkReg(fromInteger(valueof(FFT_LOG_POINTS)));
+	Reg#(Vector#(FFT_POINTS, ComplexSample)) sample <- mkRegU();
+	FIFO#(Vector#(FFT_POINTS, ComplexSample)) outputFIFO <- mkFIFO();
+
+	rule fft_circular(stage < fromInteger(valueof(FFT_LOG_POINTS)) && !done);
+		sample <= stage_f(stage, sample);
+		stage <= stage + 1;
+	endrule
+
+	rule fft_circular_out(stage == fromInteger(valueof(FFT_LOG_POINTS)) && !done);
+		outputFIFO.enq(sample);
+		done <= True;
+	endrule
+
+	interface Put request;
+		method Action put(Vector#(FFT_POINTS, ComplexSample) x) if (done);
+			sample <= bitReverse(x);
+			stage <= 0;
+			done <= False;
+		endmethod
+	endinterface
+
+	interface Get response = toGet(outputFIFO);
 endmodule
