@@ -1,0 +1,25 @@
+1. If the FFT code is polymorphic, the same code can be used in different situations without changes.
+   The price of this flexibility is that everywhere you use it, you must specify the type you want,
+   assuming the type system cannot infer what you want. More flexibility comes at the cost of a more
+   complex interface.
+
+2. Testing something like the FFT implementation pretty much boils down to putting in a problem to
+   which you know the answer, and seeing if the right thing comes out the other side. I can think of
+   two specific approaches to this. One is to generate a chunk with a specific frequency of sine wave
+   and see if the FFT produces a spike at around that frequency. Unless the length of the chunk is a
+   multiple of the period of the wave, other frequencies will probably show up due to the chunk having
+   finite length, but there will still be a big spike at the chosen frequency.
+
+   The other is to take a sample of random noise, run it through the FFT, then through the IFFT,
+   and see if the same sample comes out as went in. This should work because the Discrete Fourier
+   Transform is lossless. Treating the random chunk as a frequency domain signal instead of a time
+   domain signal, and doing the IFFT before the FFT should also work, for the same reason.
+
+   While I haven't actually done these tests, I see no reason why the FFT implementations shouldn't
+   be correct for other numbers of points, with the proviso that the number of points is a power of
+   two, and greater than two. I don't see how polymorphism help much for testing, specifically.
+   If the same code passes tests for different chunk sizes, then that improves confidence that it is
+   correct, but the process is no simpler or faster. If the test code is also polymorphic, then that
+   saves time developing and testing FFTs for different chunk sizes and types of complex numbers,
+   but there's nothing special about testing. Polymorphism makes code reuse easier, and testing
+   involves code, so polymorphism makes test reuse easier.
