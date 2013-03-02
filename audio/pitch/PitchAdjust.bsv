@@ -106,35 +106,15 @@ typedef Server#( Vector#(len, Complex#(FixedPoint#(isize, fsize)))
                ) ToMP#(numeric type len, numeric type isize, numeric type fsize, numeric type psize);
 
 module mkToMP(ToMP#(len, isize, fsize, psize));
-	FIFO#(Vector#(len, Complex#(FixedPoint#(isize, fsize)))) inputFIFO  <- mkFIFO();
-	FIFO#(Vector#(len, ComplexMP#(isize, fsize, psize))) outputFIFO     <- mkFIFO();
-
-	Vector#(len, ToMagnitudePhase#(isize, fsize, psize)) fs <- replicateM(mkCordicToMagnitudePhase());
-
-	rule mapIn(True);
-		let xs = inputFIFO.first();
-		inputFIFO.deq();
-
-		for (Integer i = 0; i < valueof(len); i = i + 1) begin
-			fs[i].request.put(xs[i]);
-		end
-	endrule
-
-	rule mapOut(True);
-		Vector#(len, ComplexMP#(isize, fsize, psize)) ys;
-		for (Integer i = 0; i < valueof(len); i = i + 1) begin
-			ys[i] <- fs[i].response.get();
-		end
-		outputFIFO.enq(ys);
-	endrule
+	MapModule#(len, Complex#(FixedPoint#(isize, fsize)), ComplexMP#(isize, fsize, psize)) mapMod <- mkMapModule(mkCordicToMagnitudePhase());
 
 	interface Put request;
 		method Action put(Vector#(len, Complex#(FixedPoint#(isize, fsize))) xs);
-			inputFIFO.enq(xs);
+			mapMod.request.put(xs);
 		endmethod
 	endinterface
 
-	interface Get response = toGet(outputFIFO);
+	interface Get response = mapMod.response;
 endmodule
 
 typedef Server#( Vector#(len, ComplexMP#(isize, fsize, psize))
@@ -142,33 +122,13 @@ typedef Server#( Vector#(len, ComplexMP#(isize, fsize, psize))
                ) FromMP#(numeric type len, numeric type isize, numeric type fsize, numeric type psize);
 
 module mkFromMP(FromMP#(len, isize, fsize, psize));
-	FIFO#(Vector#(len, ComplexMP#(isize, fsize, psize))) inputFIFO      <- mkFIFO();
-	FIFO#(Vector#(len, Complex#(FixedPoint#(isize, fsize)))) outputFIFO <- mkFIFO();
-
-	Vector#(len, FromMagnitudePhase#(isize, fsize, psize)) fs <- replicateM(mkCordicFromMagnitudePhase());
-
-	rule mapIn(True);
-		let xs = inputFIFO.first();
-		inputFIFO.deq();
-
-		for (Integer i = 0; i < valueof(len); i = i + 1) begin
-			fs[i].request.put(xs[i]);
-		end
-	endrule
-
-	rule mapOut(True);
-		Vector#(len, Complex#(FixedPoint#(isize, fsize))) ys;
-		for (Integer i = 0; i < valueof(len); i = i + 1) begin
-			ys[i] <- fs[i].response.get();
-		end
-		outputFIFO.enq(ys);
-	endrule
+	MapModule#(len, ComplexMP#(isize, fsize, psize), Complex#(FixedPoint#(isize, fsize))) mapMod <- mkMapModule(mkCordicFromMagnitudePhase());
 
 	interface Put request;
 		method Action put(Vector#(len, ComplexMP#(isize, fsize, psize)) xs);
-			inputFIFO.enq(xs);
+			mapMod.request.put(xs);
 		endmethod
 	endinterface
 
-	interface Get response = toGet(outputFIFO);
+	interface Get response = mapMod.response;
 endmodule
