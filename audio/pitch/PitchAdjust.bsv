@@ -65,6 +65,42 @@ module mkPitchAdjust(Integer s, FixedPoint#(isize, fsize) factor, PitchAdjust#(n
 	interface Get response = toGet(outputFIFO);
 endmodule
 
+typedef Server#( Vector#(len, a)
+               , Vector#(len, b)
+	       ) MapModule#(numeric type len, type a, type b);
+
+module mkMapModule(Module#(Server#(a, b)) f, MapModule#(len, a, b) ifc);
+	FIFO#(Vector#(len, a)) inputFIFO  <- mkFIFO();
+	FIFO#(Vector#(len, b)) outputFIFO <- mkFIFO();
+
+	Vector#(len, Server#(a, b)) fs <- replicateM(f);
+
+	rule mapIn(True);
+		let xs = inputFIFO.first();
+		inputFIFO.deq();
+
+		for (Integer i = 0; i < valueof(len); i = i + 1) begin
+			fs[i].request.put(xs[i]);
+		end
+	endrule
+
+	rule mapOut(True);
+		Vector#(len, b) ys;
+		for (Integer i = 0; i < valueof(len); i = i + 1) begin
+			ys[i] <- fs[i].response.get();
+		end
+		outputFIFO.enq(ys);
+	endrule
+
+	interface Put request;
+		method Action put(Vector#(len, a) xs);
+			inputFIFO.enq(xs);
+		endmethod
+	endinterface
+
+	interface Get response = toGet(outputFIFO);
+endmodule
+
 typedef Server#( Vector#(len, Complex#(FixedPoint#(isize, fsize)))
                , Vector#(len, ComplexMP#(isize, fsize, psize))
                ) ToMP#(numeric type len, numeric type isize, numeric type fsize, numeric type psize);
