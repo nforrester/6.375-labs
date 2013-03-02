@@ -2,5 +2,5 @@
 all: pitch
 
 pitch: pitch.c
-	gcc -ggdb -o $@ $^ -lfftw3
+	gcc -ggdb -o $@ $^ -lfftw3 -lm
 

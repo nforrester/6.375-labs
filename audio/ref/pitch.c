@@ -87,6 +87,14 @@ void pitchadjust(complex double* in, complex double* out)
             out[bin] = cmplxmp(mag, outphases[bin]);
         }
     }
+    printf("IN:\n");
+    for (i = 0; i < N; i++) {
+	printf("    ti?[%d] = cmplxmp(%f, tophase(%f));\n", i, cabs(in[i]), carg(in[i]));
+    }
+    printf("OUT:\n");
+    for (i = 0; i < N; i++) {
+	printf("    to?[%d] = cmplxmp(%f, tophase(%f));\n", i, cabs(out[i]), carg(out[i]));
+    }
 }
 
 int main(int argc, char* argv[])
