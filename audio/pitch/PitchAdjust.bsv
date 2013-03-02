@@ -108,12 +108,7 @@ typedef Server#( Vector#(len, Complex#(FixedPoint#(isize, fsize)))
 module mkToMP(ToMP#(len, isize, fsize, psize));
 	MapModule#(len, Complex#(FixedPoint#(isize, fsize)), ComplexMP#(isize, fsize, psize)) mapMod <- mkMapModule(mkCordicToMagnitudePhase());
 
-	interface Put request;
-		method Action put(Vector#(len, Complex#(FixedPoint#(isize, fsize))) xs);
-			mapMod.request.put(xs);
-		endmethod
-	endinterface
-
+	interface Put request = mapMod.request;
 	interface Get response = mapMod.response;
 endmodule
 
@@ -124,11 +119,6 @@ typedef Server#( Vector#(len, ComplexMP#(isize, fsize, psize))
 module mkFromMP(FromMP#(len, isize, fsize, psize));
 	MapModule#(len, ComplexMP#(isize, fsize, psize), Complex#(FixedPoint#(isize, fsize))) mapMod <- mkMapModule(mkCordicFromMagnitudePhase());
 
-	interface Put request;
-		method Action put(Vector#(len, ComplexMP#(isize, fsize, psize)) xs);
-			mapMod.request.put(xs);
-		endmethod
-	endinterface
-
+	interface Put request = mapMod.request;
 	interface Get response = mapMod.response;
 endmodule
