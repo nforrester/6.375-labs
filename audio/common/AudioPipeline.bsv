@@ -15,7 +15,7 @@ import PitchAdjust::*;
 
 import Vector::*;
 
-module mkAudioPipeline(AudioProcessor);
+module [Module] mkAudioPipeline(AudioProcessor);
 
     AudioProcessor fir <- mkFIRFilter(c);
     Chunker#(2, Sample) chunker <- mkChunker();

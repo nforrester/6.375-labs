@@ -69,7 +69,7 @@ typedef Server#( Vector#(len, a)
                , Vector#(len, b)
 	       ) MapModule#(numeric type len, type a, type b);
 
-module mkMapModule(Module#(Server#(a, b)) f, MapModule#(len, a, b) ifc);
+module [Module] mkMapModule(Module#(Server#(a, b)) f, MapModule#(len, a, b) ifc) provisos (Bits#(Vector::Vector#(len, b), a__), Bits#(Vector::Vector#(len, a), b__));
 	FIFO#(Vector#(len, a)) inputFIFO  <- mkFIFO();
 	FIFO#(Vector#(len, b)) outputFIFO <- mkFIFO();
 
@@ -105,7 +105,7 @@ typedef Server#( Vector#(len, Complex#(FixedPoint#(isize, fsize)))
                , Vector#(len, ComplexMP#(isize, fsize, psize))
                ) ToMP#(numeric type len, numeric type isize, numeric type fsize, numeric type psize);
 
-module mkToMP(ToMP#(len, isize, fsize, psize));
+module [Module] mkToMP(ToMP#(len, isize, fsize, psize));
 	MapModule#(len, Complex#(FixedPoint#(isize, fsize)), ComplexMP#(isize, fsize, psize)) mapMod <- mkMapModule(mkCordicToMagnitudePhase());
 
 	interface Put request = mapMod.request;
@@ -116,7 +116,7 @@ typedef Server#( Vector#(len, ComplexMP#(isize, fsize, psize))
                , Vector#(len, Complex#(FixedPoint#(isize, fsize)))
                ) FromMP#(numeric type len, numeric type isize, numeric type fsize, numeric type psize);
 
-module mkFromMP(FromMP#(len, isize, fsize, psize));
+module [Module] mkFromMP(FromMP#(len, isize, fsize, psize));
 	MapModule#(len, ComplexMP#(isize, fsize, psize), Complex#(FixedPoint#(isize, fsize))) mapMod <- mkMapModule(mkCordicFromMagnitudePhase());
 
 	interface Put request = mapMod.request;
