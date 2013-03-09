@@ -7,7 +7,7 @@ if { [info exists bscws] } {
 
     # Add the "Run Testbench" button
     register_tool_bar_item runbench {
-        runtb ./tb
+        runtb ./tb 2
     } cog.gif {run testbench}
 }
 
