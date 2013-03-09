@@ -70,6 +70,9 @@ int main(int argc, char* argv[])
     SceMiParameters params("scemi.params");
     SceMi *sceMi = SceMi::Init(sceMiVersion, &params);
 
+    // Initialize the SciMi setfactor port
+    InportProxyT<FactorType> setfactor ("", "scemi_setfactor_inport", sceMi);
+
     // Initialize the SceMi inport
     InportProxyT<BitT<16> > inport ("", "scemi_processor_req_inport", sceMi);
 
@@ -87,6 +90,13 @@ int main(int argc, char* argv[])
 
     // Reset the dut.
     reset.reset();
+
+    // Set the pitch factor
+    double pf = atof(argv[1]);
+    FactorType factor;
+    factor.m_i = (int)floor(pf);
+    factor.m_f = (int)(pow(2, factor.m_f.getBitSize()) * (pf - floor(pf)));
+    setfactor.sendMessage(factor);
 
     // Send in all the data.
     runtest(inport);

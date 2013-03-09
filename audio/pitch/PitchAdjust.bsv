@@ -9,60 +9,111 @@ import Vector::*;
 import Complex::*;
 import ComplexMP::*;
 
-
 typedef Server#(
 	Vector#(nbins, ComplexMP#(isize, fsize, psize)),
 	Vector#(nbins, ComplexMP#(isize, fsize, psize))
 ) PitchAdjust#(numeric type nbins, numeric type isize, numeric type fsize, numeric type psize);
 
+interface SettablePitchAdjust#(numeric type nbins, numeric type isize, numeric type fsize, numeric type psize);
+	interface PitchAdjust#(nbins, isize, fsize, psize) adjust;
+	interface Put#(FixedPoint#(isize, fsize)) setfactor;
+endinterface
 
 // s - the amount each window is shifted from the previous window.
 //
 // factor - the amount to adjust the pitch.
 //  1.0 makes no change. 2.0 goes up an octave, 0.5 goes down an octave, etc...
-module mkPitchAdjust(Integer s, FixedPoint#(isize, fsize) factor, PitchAdjust#(nbins, isize, fsize, psize) ifc) provisos (Add#(a__, TAdd#(3, TLog#(nbins)), isize), Add#(b__, psize, isize), Add#(c__, psize, TAdd#(isize, isize)));
+module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize) ifc) provisos (Add#(a__, TAdd#(3, TLog#(nbins)), isize), Add#(b__, psize, isize), Add#(c__, psize, TAdd#(isize, isize)), Add#(TAdd#(1, TLog#(TAdd#(3, nbins))), e__, isize));
 	FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) inputFIFO  <- mkFIFO();
 	FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outputFIFO <- mkFIFO();
 
 	Vector#(nbins, Reg#(Phase#(psize))) inPhases  <- replicateM(mkReg(0));
 	Vector#(nbins, Reg#(Phase#(psize))) outPhases <- replicateM(mkReg(0));
+	Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) out <- mkReg(replicate(cmplxmp(0, 0)));
+	Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) in <- mkReg(replicate(cmplxmp(0, 0)));
 
-	rule pitchAdjust(True);
-		let in = inputFIFO.first();
+	Reg#(Maybe#(FixedPoint#(isize, fsize))) factor <- mkReg(tagged Invalid);
+	Reg#(Int#(TAdd#(1, TLog#(TAdd#(3, nbins))))) i <- mkRegU();
+
+	//Reg#(FixedPoint#(misize, mfsize)) multiplied <- mkRegU();
+	let multiplied <- mkRegU();
+	Reg#(Int#(3)) abcd <- mkReg(0);
+	Reg#(Int#(TAdd#(3, TLog#(nbins)))) binR <- mkRegU();
+	Reg#(Int#(TAdd#(3, TLog#(nbins)))) nbinR <- mkRegU();
+	let magR <- mkRegU();
+	let iFxptR <- mkRegU();
+	let ip1FxptR <- mkRegU();
+	Reg#(Int#(psize)) dphaseR <- mkRegU();
+
+	rule pitchAdjustIn(isValid(factor) && i == fromInteger(valueof(nbins)) + 1);
+		in <= inputFIFO.first();
 		inputFIFO.deq();
 
-		Vector#(nbins, ComplexMP#(isize, fsize, psize)) out = replicate(cmplxmp(0, 0));
-
-		for(Integer i = 0; i < valueof(nbins); i = i + 1) begin
-			let phase = phaseof(in[i]);
-			let mag = in[i].magnitude;
-			
-			let dphase = phase - inPhases[i];
-			inPhases[i] <= phase;
-
-			Int#(TAdd#(3, TLog#(nbins))) bin = truncate(fxptGetInt(fromInteger(i) * factor));
-			Int#(TAdd#(3, TLog#(nbins))) nbin = truncate(fxptGetInt(fromInteger(i + 1) * factor));
-
-			if (nbin != bin && bin >= 0 && bin < fromInteger(valueof(nbins))) begin
-				FixedPoint#(isize, fsize) dphaseFxpt = fromInt(dphase);
-				let multiplied = fxptMult(dphaseFxpt, factor);
-				let multInt = fxptGetInt(multiplied);
-				let shifted = truncate(multInt);
-				outPhases[bin] <= outPhases[bin] + shifted;
-				out[bin] = cmplxmp(mag, outPhases[bin] + shifted);
-			end
-		end
-
-		outputFIFO.enq(out);
+		out <= replicate(cmplxmp(0, 0));
+		i <= 0;
 	endrule
 
-	interface Put request;
-		method Action put(Vector#(nbins, ComplexMP#(isize, fsize, psize)) x);
-			inputFIFO.enq(x);
-		endmethod
+	rule pitchAdjustA(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 0);
+		let phase = phaseof(in[i]);
+		let mag = in[i].magnitude;
+		
+		let dphase = phase - inPhases[i];
+		inPhases[i] <= phase;
+		magR <= mag;
+		dphaseR <= dphase;
+		abcd <= -1;
+	endrule
+
+	rule pitchAdjustB(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == -1);
+		iFxptR <= fromInt(i);
+		ip1FxptR <= fromInt(i + 1);
+		abcd <= 1;
+	endrule
+	rule pitchAdjustB2(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 1);
+		Int#(TAdd#(3, TLog#(nbins))) bin = truncate(fxptGetInt(iFxptR * fromMaybe(2, factor)));
+		Int#(TAdd#(3, TLog#(nbins))) nbin = truncate(fxptGetInt(ip1FxptR * fromMaybe(2, factor)));
+		binR <= bin;
+		nbinR <= nbin;
+		abcd <= 2;
+	endrule
+
+	rule pitchAdjustC(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 2);
+
+		if (nbinR != binR && binR >= 0 && binR < fromInteger(valueof(nbins))) begin
+			FixedPoint#(isize, fsize) dphaseFxpt = fromInt(dphaseR);
+			multiplied <= fxptMult(dphaseFxpt, fromMaybe(2, factor));
+		end
+		abcd <= 3;
+	endrule
+
+	rule pitchAdjustD(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 3);
+		if (nbinR != binR && binR >= 0 && binR < fromInteger(valueof(nbins))) begin
+			let multInt = fxptGetInt(multiplied);
+			let shifted = truncate(multInt);
+			outPhases[binR] <= outPhases[binR] + shifted;
+			out[binR] <= cmplxmp(magR, outPhases[binR] + shifted);
+		end
+
+		i <= i + 1;
+		abcd <= 0;
+	endrule
+
+	rule pitchAdjustOut(isValid(factor) && i == fromInteger(valueof(nbins)));
+		outputFIFO.enq(out);
+		i <= i + 1;
+	endrule
+
+	interface PitchAdjust adjust;
+		interface Put request  = toPut(inputFIFO);
+		interface Get response = toGet(outputFIFO);
 	endinterface
 
-	interface Get response = toGet(outputFIFO);
+	interface Put setfactor;
+		method Action put(FixedPoint#(isize, fsize) x) if (!isValid(factor));
+			factor <= tagged Valid x;
+			i <= fromInteger(valueof(nbins)) + 1;
+		endmethod
+	endinterface
 endmodule
 
 typedef Server#( Vector#(len, a)
@@ -92,12 +143,7 @@ module [Module] mkMapModule(Module#(Server#(a, b)) f, MapModule#(len, a, b) ifc)
 		outputFIFO.enq(ys);
 	endrule
 
-	interface Put request;
-		method Action put(Vector#(len, a) xs);
-			inputFIFO.enq(xs);
-		endmethod
-	endinterface
-
+	interface Put request  = toPut(inputFIFO);
 	interface Get response = toGet(outputFIFO);
 endmodule
 
