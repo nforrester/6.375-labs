@@ -128,7 +128,7 @@ endmodule
 
 // Wrapper around The FFT module we actually want to use
 module mkFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points), Arith#(complex), RealLiteral#(complex), Bits#(complex, c__));
-    let fft <- mkCircularFFT();
+    let fft <- mkLinearFFT();
 
     interface Put request = fft.request;
     interface Get response = fft.response;
