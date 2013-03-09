@@ -172,16 +172,39 @@ module mkLinearFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points)
 	// Statically generate the twiddle factors table.
 	TwiddleTable#(fft_points, complex) twiddles = genTwiddles();
 
-	// Define the stage_f function which uses the generated twiddles.
-	function Vector#(fft_points, Complex#(complex)) stage_f(Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, Complex#(complex)) stage_in);
-		return stage_ft(twiddles, stage, stage_in);
-	endfunction
-
 	Vector#(TAdd#(1, TLog#(fft_points)), FIFO#(Vector#(fft_points, Complex#(complex)))) stageFIFO <- replicateM(mkFIFO());
 
+	Vector#(TLog#(fft_points), FIFO#(Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)))) multResults <- replicateM(replicateM(mkFIFO()));
+
 	for(Integer stage = 0; stage < valueof(TLog#(fft_points)); stage = stage + 1) begin
-		rule fft_stage;
-			stageFIFO[stage+1].enq(stage_f(fromInteger(stage), stageFIFO[stage].first()));
+		rule fft_stage_a;
+			Vector#(fft_points, Complex#(complex)) stage_temp = newVector();
+			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
+			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
+				Integer idx = i * 2;
+				let twid = twiddles[fromInteger(stage)][i];
+				let t = takeAt(idx, stageFIFO[stage].first());
+
+				Complex#(complex) m[i] = t[1] * twid;
+			end
+			multResults[stage].enq(m);
+		endrule
+
+		rule fft_stage_b;
+			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
+			m = multResults[stage].first();
+			multResults[stage].deq();
+			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
+				stage_temp[idx]   = t[0] + m[i];
+				stage_temp[idx+1] = t[0] - m[i];
+			end
+
+			Vector#(fft_points, Complex#(complex)) stage_out = newVector();
+			for (Integer i = 0; i < valueof(fft_points); i = i+1) begin
+				stage_out[i] = stage_temp[permute(i, valueof(fft_points))];
+			end
+
+			stageFIFO[stage+1].enq(stage_out);
 			stageFIFO[stage].deq();
 		endrule
 	end
