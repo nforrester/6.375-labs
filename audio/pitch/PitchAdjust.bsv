@@ -41,6 +41,8 @@ module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize)
 	Reg#(Int#(TAdd#(3, TLog#(nbins)))) binR <- mkRegU();
 	Reg#(Int#(TAdd#(3, TLog#(nbins)))) nbinR <- mkRegU();
 	let magR <- mkRegU();
+	let iFxptR <- mkRegU();
+	let ip1FxptR <- mkRegU();
 	Reg#(Int#(psize)) dphaseR <- mkRegU();
 
 	rule pitchAdjustIn(isValid(factor) && i == fromInteger(valueof(nbins)) + 1);
@@ -59,12 +61,17 @@ module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize)
 		inPhases[i] <= phase;
 		magR <= mag;
 		dphaseR <= dphase;
-		abcd <= 1;
+		abcd <= -1;
 	endrule
 
-	rule pitchAdjustB(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 1);
-		Int#(TAdd#(3, TLog#(nbins))) bin = truncate(fxptGetInt(fromInt(i) * fromMaybe(2, factor)));
-		Int#(TAdd#(3, TLog#(nbins))) nbin = truncate(fxptGetInt(fromInt(i + 1) * fromMaybe(2, factor)));
+	rule pitchAdjustB(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == -1);
+		iFxptR <= fromInt(i);
+		ip1FxptR <= fromInt(i + 1);
+		abcd <= 1;
+	endrule
+	rule pitchAdjustB2(isValid(factor) && i < fromInteger(valueof(nbins)) && abcd == 1);
+		Int#(TAdd#(3, TLog#(nbins))) bin = truncate(fxptGetInt(iFxptR * fromMaybe(2, factor)));
+		Int#(TAdd#(3, TLog#(nbins))) nbin = truncate(fxptGetInt(ip1FxptR * fromMaybe(2, factor)));
 		binR <= bin;
 		nbinR <= nbin;
 		abcd <= 2;
