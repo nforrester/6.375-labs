@@ -1,6 +1,8 @@
-1. I haven't gotten it to compile yet with a dynamic pitch factor.
-2. The critical path is in the FIR filter (without the dynamic pitch factor,
-   obviously, because I haven't gotten that to compile yet).
+1. Number of Slice Registers:                29,802 out of  69,120   43%
+   Number of Slice LUTs:                     50,448 out of  69,120   72%
+   I was unable to get values for individual modules, because adding the
+   synthesize boundaries reduced performance unacceptably.
+2. Length of critical path: 19.477ns
 3. Once it compiled and passed the timing constraints,
    the FPGA worked on the first try.
 4. Subinterfaces allow you to do something like reverse inheritence.
