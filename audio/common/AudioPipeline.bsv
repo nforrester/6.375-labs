@@ -22,14 +22,14 @@ endinterface
 
 module [Module] mkAudioPipeline(SettableAudioProcessor#(16, 16));
 
-    AudioProcessor fir <- mkFIRFilter(c);
+    AudioProcessor fir <- mkApFIRFilter();
     Chunker#(2, Sample) chunker <- mkChunker();
     OverSampler#(2, FFT_POINTS, Sample) overSampler <- mkOverSampler(replicate(0));
-    FFT#(FFT_POINTS, FixedPoint#(16,16)) fft <- mkFFT();
-    ToMP#(FFT_POINTS, 16, 16, 16) toMP <- mkToMP();
-    SettablePitchAdjust#(FFT_POINTS, 16, 16, 16) pitchAdjust <- mkPitchAdjust(2);
-    FromMP#(FFT_POINTS, 16, 16, 16) fromMP <- mkFromMP();
-    FFT#(FFT_POINTS, FixedPoint#(16,16)) ifft <- mkIFFT();
+    FFT#(FFT_POINTS, FixedPoint#(16,16)) fft <- mkApFFT();
+    ToMP#(FFT_POINTS, 16, 16, 16) toMP <- mkApToMP();
+    SettablePitchAdjust#(FFT_POINTS, 16, 16, 16) pitchAdjust <- mkApPitchAdjust();
+    FromMP#(FFT_POINTS, 16, 16, 16) fromMP <- mkApFromMP();
+    FFT#(FFT_POINTS, FixedPoint#(16,16)) ifft <- mkApIFFT();
     Overlayer#(FFT_POINTS, 2, Sample) overlayer <- mkOverlayer(replicate(0));
     Splitter#(2, Sample) splitter <- mkSplitter();
 
@@ -90,5 +90,40 @@ module [Module] mkAudioPipeline(SettableAudioProcessor#(16, 16));
     endinterface
 
     interface Put setfactor = pitchAdjust.setfactor;
+endmodule
 
+(* synthesize *)
+module mkApFFT(FFT#(FFT_POINTS, FixedPoint#(16,16)));
+	FFT#(FFT_POINTS, FixedPoint#(16,16)) fft <- mkFFT();
+	return fft;
+endmodule
+
+(* synthesize *)
+module mkApIFFT(FFT#(FFT_POINTS, FixedPoint#(16,16)));
+	FFT#(FFT_POINTS, FixedPoint#(16,16)) ifft <- mkIFFT();
+	return ifft;
+endmodule
+
+(* synthesize *)
+module mkApPitchAdjust(SettablePitchAdjust#(FFT_POINTS, 16, 16, 16));
+	SettablePitchAdjust#(FFT_POINTS, 16, 16, 16) pitchAdjust <- mkPitchAdjust(2);
+	return pitchAdjust;
+endmodule
+
+(* synthesize *)
+module mkApFIRFilter(AudioProcessor);
+	AudioProcessor fir <- mkFIRFilter(c);
+	return fir;
+endmodule
+
+(* synthesize *)
+module mkApToMP(ToMP#(FFT_POINTS, 16, 16, 16));
+	ToMP#(FFT_POINTS, 16, 16, 16) toMP <- mkToMP();
+	return toMP;
+endmodule
+
+(* synthesize *)
+module mkApFromMP(FromMP#(FFT_POINTS, 16, 16, 16));
+	FromMP#(FFT_POINTS, 16, 16, 16) fromMP <- mkFromMP();
+	return fromMP;
 endmodule
