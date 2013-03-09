@@ -1,7 +1,35 @@
 1. Number of Slice Registers:                29,802 out of  69,120   43%
    Number of Slice LUTs:                     50,448 out of  69,120   72%
-   I was unable to get values for individual modules, because adding the
-   synthesize boundaries reduced performance unacceptably.
+
+   Adding the synthesize boundaries reduced performance unacceptably.
+   However, if I did run it with synthesize boundaries, and let it fail timing,
+   here are the numbers I got:
+
+   FIR:
+     - Slice Reg: 128/790
+     - LUTs:      251/2895
+     - DSP48E:    0/36
+   FFT:
+     - Slice Reg: 0/4116
+     - LUTs:      3607/6046
+     - DSP48E:    12/12
+   ToMP:
+     - Slice Reg: 696/4124
+     - LUTs:      8352/10270
+     - DSP48E:    0/0
+   PitchAdjust:
+     - Slice Reg: 1153/2693
+     - LUTs:      1350/2142
+     - DSP48E:    12/12
+   FromMP:
+     - Slice Reg: 692/4056
+     - LUTs:      7551/9421
+     - DSP48E:    4/4
+   IFFT:
+     - Slice Reg: 4/4906
+     - LUTs:      4913/7473
+     - DSP48E:    0/0
+
 2. Length of critical path: 19.477ns
 3. Once it compiled and passed the timing constraints,
    the FPGA worked on the first try.
