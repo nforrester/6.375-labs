@@ -1,0 +1,11 @@
+1. I haven't gotten it to compile yet with a dynamic pitch factor.
+2. The critical path is in the FIR filter (without the dynamic pitch factor,
+   obviously, because I haven't gotten that to compile yet).
+3. Once it compiled and passed the timing constraints,
+   the FPGA worked on the first try.
+4. Subinterfaces allow you to do something like reverse inheritence.
+   You can combine interfaces into larger wholes.
+5. We could pipeline the FFT in the perpendicular direction.
+   Make each stage a circular pipeline that processes the chunks of the sample.
+   The rest of the audio pipeline wouldn't need to change, if the other parts could
+   handle the increased width on their own.
