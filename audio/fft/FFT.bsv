@@ -175,31 +175,38 @@ module mkLinearFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points)
 	Vector#(TAdd#(1, TLog#(fft_points)), FIFO#(Vector#(fft_points, Complex#(complex)))) stageFIFO <- replicateM(mkFIFO());
 
 	Vector#(TLog#(fft_points), FIFO#(Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)))) multResults <- replicateM(mkFIFO());
+	Vector#(TLog#(fft_points), FIFO#(Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)))) tsFIFO <- replicateM(mkFIFO());
 
 	for(Integer stage = 0; stage < valueof(TLog#(fft_points)); stage = stage + 1) begin
 		rule fft_stage_a;
 			Vector#(fft_points, Complex#(complex)) stage_temp = newVector();
 			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
+			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) ts = newVector();
 			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
 				Integer idx = i * 2;
 				Complex#(complex) twid = twiddles[fromInteger(stage)][i];
 				Vector#(2, Complex#(complex)) t = takeAt(idx, stageFIFO[stage].first());
 
 				m[i] = t[1] * twid;
+				ts[i] = t[0];
 			end
 			multResults[stage].enq(m);
+			tsFIFO[stage].enq(ts);
+			stageFIFO[stage].deq();
 		endrule
 
 		rule fft_stage_b;
 			Vector#(fft_points, Complex#(complex)) stage_temp = newVector();
 			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
+			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) ts = newVector();
 			m = multResults[stage].first();
+			ts = tsFIFO[stage].first();
 			multResults[stage].deq();
+			tsFIFO[stage].deq();
 			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
 				Integer idx = i * 2;
-				Vector#(2, Complex#(complex)) t = takeAt(idx, stageFIFO[stage].first());
-				stage_temp[idx]   = t[0] + m[i];
-				stage_temp[idx+1] = t[0] - m[i];
+				stage_temp[idx]   = ts[i] + m[i];
+				stage_temp[idx+1] = ts[i] - m[i];
 			end
 
 			Vector#(fft_points, Complex#(complex)) stage_out = newVector();
@@ -208,7 +215,6 @@ module mkLinearFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points)
 			end
 
 			stageFIFO[stage+1].enq(stage_out);
-			stageFIFO[stage].deq();
 		endrule
 	end
 
