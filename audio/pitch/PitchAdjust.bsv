@@ -35,6 +35,13 @@ module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize)
 	Reg#(Maybe#(FixedPoint#(isize, fsize))) factor <- mkReg(tagged Invalid);
 	Reg#(Int#(TAdd#(1, TLog#(TAdd#(3, nbins))))) i <- mkRegU();
 
+	//Reg#(FixedPoint#(misize, mfsize)) multiplied <- mkRegU();
+	let multiplied <- mkRegU();
+	Reg#(Bool) aOrB <- mkReg(False);
+	Reg#(Int#(TAdd#(3, TLog#(nbins)))) binR <- mkRegU();
+	Reg#(Int#(TAdd#(3, TLog#(nbins)))) nbinR <- mkRegU();
+	let magR <- mkRegU();
+
 	rule pitchAdjustIn(isValid(factor) && i == fromInteger(valueof(nbins)) + 1);
 		in <= inputFIFO.first();
 		inputFIFO.deq();
@@ -43,7 +50,7 @@ module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize)
 		i <= 0;
 	endrule
 
-	rule pitchAdjust(isValid(factor) && i < fromInteger(valueof(nbins)));
+	rule pitchAdjustA(isValid(factor) && i < fromInteger(valueof(nbins)) && !aOrB);
 		let phase = phaseof(in[i]);
 		let mag = in[i].magnitude;
 		
@@ -55,14 +62,24 @@ module mkPitchAdjust(Integer s, SettablePitchAdjust#(nbins, isize, fsize, psize)
 
 		if (nbin != bin && bin >= 0 && bin < fromInteger(valueof(nbins))) begin
 			FixedPoint#(isize, fsize) dphaseFxpt = fromInt(dphase);
-			let multiplied = fxptMult(dphaseFxpt, fromMaybe(2, factor));
+			multiplied <= fxptMult(dphaseFxpt, fromMaybe(2, factor));
+		end
+		binR <= bin;
+		nbinR <= nbin;
+		magR <= mag;
+		aOrB <= True;
+	endrule
+
+	rule pitchAdjustB(isValid(factor) && i < fromInteger(valueof(nbins)) && aOrB);
+		if (nbinR != binR && binR >= 0 && binR < fromInteger(valueof(nbins))) begin
 			let multInt = fxptGetInt(multiplied);
 			let shifted = truncate(multInt);
-			outPhases[bin] <= outPhases[bin] + shifted;
-			out[bin] <= cmplxmp(mag, outPhases[bin] + shifted);
+			outPhases[binR] <= outPhases[binR] + shifted;
+			out[binR] <= cmplxmp(magR, outPhases[binR] + shifted);
 		end
 
 		i <= i + 1;
+		aOrB <= False;
 	endrule
 
 	rule pitchAdjustOut(isValid(factor) && i == fromInteger(valueof(nbins)));
