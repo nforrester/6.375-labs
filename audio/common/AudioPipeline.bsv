@@ -27,7 +27,7 @@ module [Module] mkAudioPipeline(SettableAudioProcessor#(16, 16));
     OverSampler#(2, FFT_POINTS, Sample) overSampler <- mkOverSampler(replicate(0));
     FFT#(FFT_POINTS, FixedPoint#(16,16)) fft <- mkFFT();
     ToMP#(FFT_POINTS, 16, 16, 16) toMP <- mkToMP();
-    SettablePitchAdjust#(FFT_POINTS, 16, 16, 16) pitchAdjust <- mkApPitchAdjust();
+    SettablePitchAdjust#(FFT_POINTS, 16, 16, 16) pitchAdjust <- mkPitchAdjust(2);
     FromMP#(FFT_POINTS, 16, 16, 16) fromMP <- mkFromMP();
     FFT#(FFT_POINTS, FixedPoint#(16,16)) ifft <- mkIFFT();
     Overlayer#(FFT_POINTS, 2, Sample) overlayer <- mkOverlayer(replicate(0));
