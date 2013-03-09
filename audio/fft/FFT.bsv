@@ -174,7 +174,7 @@ module mkLinearFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points)
 
 	Vector#(TAdd#(1, TLog#(fft_points)), FIFO#(Vector#(fft_points, Complex#(complex)))) stageFIFO <- replicateM(mkFIFO());
 
-	Vector#(TLog#(fft_points), FIFO#(Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)))) multResults <- replicateM(replicateM(mkFIFO()));
+	Vector#(TLog#(fft_points), FIFO#(Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)))) multResults <- replicateM(mkFIFO());
 
 	for(Integer stage = 0; stage < valueof(TLog#(fft_points)); stage = stage + 1) begin
 		rule fft_stage_a;
@@ -182,19 +182,22 @@ module mkLinearFFT (FFT#(fft_points, complex)) provisos(Add#(2, a__, fft_points)
 			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
 			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
 				Integer idx = i * 2;
-				let twid = twiddles[fromInteger(stage)][i];
-				let t = takeAt(idx, stageFIFO[stage].first());
+				Complex#(complex) twid = twiddles[fromInteger(stage)][i];
+				Vector#(2, Complex#(complex)) t = takeAt(idx, stageFIFO[stage].first());
 
-				Complex#(complex) m[i] = t[1] * twid;
+				m[i] = t[1] * twid;
 			end
 			multResults[stage].enq(m);
 		endrule
 
 		rule fft_stage_b;
+			Vector#(fft_points, Complex#(complex)) stage_temp = newVector();
 			Vector#(fft_points /* fft_points/2 would be better*/, Complex#(complex)) m = newVector();
 			m = multResults[stage].first();
 			multResults[stage].deq();
 			for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin
+				Integer idx = i * 2;
+				Vector#(2, Complex#(complex)) t = takeAt(idx, stageFIFO[stage].first());
 				stage_temp[idx]   = t[0] + m[i];
 				stage_temp[idx+1] = t[0] - m[i];
 			end
