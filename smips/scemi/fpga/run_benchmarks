@@ -1,0 +1,9 @@
+#!/bin/bash
+
+for x in ../../programs/build/*.bench.vmh ; do
+    echo $x
+    sleep 1
+    runtb ./tb $x
+    sleep 1
+done
+

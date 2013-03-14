@@ -1,0 +1,10 @@
+#!/bin/bash
+
+for x in ../../programs/build/*.asm.vmh ; do
+    echo $x
+    ./bsim_dut 2> /dev/null > /dev/null &
+    sleep 1
+    ./tb $x
+    sleep 1
+done
+
