@@ -8,8 +8,9 @@ import DMemory::*;
 import Decode::*;
 import Exec::*;
 import Cop::*;
+import GetPut::*;
 
-typedef enum {Fetch, Execute} State deriving (Bits, Eq);
+typedef enum {Fetch, Execute, WriteBack} State deriving (Bits, Eq);
 
 (* synthesize *)
 module [Module] mkProc(Proc);
@@ -20,24 +21,29 @@ module [Module] mkProc(Proc);
   Cop       cop <- mkCop;
   
   Reg#(State) state <- mkReg(Fetch);
-  Reg#(Data)     ir <- mkRegU;
+//  Reg#(Data)     ir <- mkRegU;
 
   Bool memReady = iMem.init.done() && dMem.init.done();
 
-  rule doFetch(cop.started && state == Fetch);
-    let inst = iMem.req(pc);
+  Reg#(ExecInst) eInstR <- mkRegU;
 
-    $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
+  rule doFetch(cop.started && state == Fetch);
+    iMem.req.put(MemReq{op: Ld, addr: pc, data: ?});
+
+//    $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
 
     // store the instruction in a register
-    ir <= inst;
+//    ir <= inst;
 
     // switch to execute state
     state <= Execute;
   endrule
 
   rule doExecute(cop.started && state == Execute);
-    let inst = ir;
+//    let inst = ir;
+    let inst;
+    inst <- iMem.resp.get();
+    $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
 
     let dInst = decode(inst);
 
@@ -56,11 +62,22 @@ module [Module] mkProc(Proc);
 
     if(eInst.iType == Ld)
     begin
-      eInst.data <- dMem.req(MemReq{op: Ld, addr: eInst.addr, data: ?});
+      dMem.req.put(MemReq{op: Ld, addr: eInst.addr, data: ?});
     end
     else if(eInst.iType == St)
     begin
-      let d <- dMem.req(MemReq{op: St, addr: eInst.addr, data: eInst.data});
+      dMem.req.put(MemReq{op: St, addr: eInst.addr, data: eInst.data});
+    end
+
+    eInstR <= eInst;
+    state <= WriteBack;
+  endrule
+
+  rule doWriteBack(cop.started && state == WriteBack);
+    let eInst = eInstR;
+    if(eInst.iType == Ld)
+    begin
+      eInst.data <- dMem.resp.get();
     end
 
     if (isValid(eInst.dst) && validValue(eInst.dst).regType == Normal)
