@@ -10,7 +10,7 @@ import Exec::*;
 import Cop::*;
 import GetPut::*;
 
-typedef enum {Fetch, Execute, WriteBack} State deriving (Bits, Eq);
+typedef enum {Fetch, Decode, Execute, WriteBack} State deriving (Bits, Eq);
 
 (* synthesize *)
 module [Module] mkProc(Proc);
@@ -26,6 +26,7 @@ module [Module] mkProc(Proc);
   Bool memReady = iMem.init.done() && dMem.init.done();
 
   Reg#(ExecInst) eInstR <- mkRegU;
+  Reg#(DecodedInst) dInstR <- mkRegU;
 
   rule doFetch(cop.started && state == Fetch);
     iMem.req.put(MemReq{op: Ld, addr: pc, data: ?});
@@ -35,17 +36,24 @@ module [Module] mkProc(Proc);
     // store the instruction in a register
 //    ir <= inst;
 
-    // switch to execute state
-    state <= Execute;
+    // switch to decode state
+    state <= Decode;
   endrule
 
-  rule doExecute(cop.started && state == Execute);
+  rule doDecode(cop.started && state == Decode);
 //    let inst = ir;
     let inst;
     inst <- iMem.resp.get();
     $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
 
     let dInst = decode(inst);
+    dInstR <= dInst;
+    // switch to execute state
+    state <= Execute;
+  endrule
+
+  rule doExecute(cop.started && state == Execute);
+    let dInst = dInstR;
 
     let rVal1 = rf.rd1(validRegValue(dInst.src1));
     let rVal2 = rf.rd2(validRegValue(dInst.src2));     
