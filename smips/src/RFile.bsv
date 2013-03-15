@@ -21,7 +21,6 @@ import Types::*;
 import ProcTypes::*;
 import Vector::*;
 import Ehr::*;
-import ConfigReg::*;
 
 interface RFile;
     method Action wr( RIndx rindx, Data data );
@@ -31,7 +30,7 @@ endinterface
 
  (* synthesize *)
 module mkRFile( RFile );
-    Vector#(32, Reg#(Data)) rfile <- replicateM(mkConfigReg(0));
+    Vector#(32, Reg#(Data)) rfile <- replicateM(mkReg(0));
 
     function Data read(RIndx rindx);
         return rfile[rindx];
