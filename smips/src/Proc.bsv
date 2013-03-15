@@ -1,4 +1,3 @@
-
 import Types::*;
 import ProcTypes::*;
 import MemTypes::*;
@@ -14,102 +13,111 @@ typedef enum {Fetch, Decode, Execute, WriteBack} State deriving (Bits, Eq);
 
 (* synthesize *)
 module [Module] mkProc(Proc);
-  Reg#(Addr) pc <- mkRegU;
-  RFile      rf <- mkRFile;
-  IMemory  iMem <- mkIMemory;
-  DMemory  dMem <- mkDMemory;
-  Cop       cop <- mkCop;
-  
-  Reg#(State) state <- mkReg(Fetch);
-//  Reg#(Data)     ir <- mkRegU;
+	Reg#(Addr)  pc <- mkRegU;
+	Reg#(Addr) ppc <- mkRegU;
+	RFile       rf <- mkRFile;
+	IMemory   iMem <- mkIMemory;
+	DMemory   dMem <- mkDMemory;
+	Cop        cop <- mkCop;
 
-  Bool memReady = iMem.init.done() && dMem.init.done();
+	Reg#(State) state <- mkReg(Fetch);
 
-  Reg#(ExecInst) eInstR <- mkRegU;
-  Reg#(DecodedInst) dInstR <- mkRegU;
+	Bool memReady = iMem.init.done() && dMem.init.done();
 
-  rule doFetch(cop.started && state == Fetch);
-    iMem.req.put(MemReq{op: Ld, addr: pc, data: ?});
+	Reg#(ExecInst) eInstR <- mkRegU;
+	Reg#(DecodedInst) dInstR <- mkRegU;
 
-//    $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
+	Reg#(UInt#(4)) epoch0 <-mkReg(0);
+	Reg#(UInt#(4)) epoch1 <-mkRegU;
 
-    // store the instruction in a register
-//    ir <= inst;
+	AddrPred addrPred <- mkPcPlus4;
 
-    // switch to decode state
-    state <= Decode;
-  endrule
+	rule doFetch(cop.started && state == WriteBack);
+		ppc <= addrPred.predPc(pc);
 
-  rule doDecode(cop.started && state == Decode);
-//    let inst = ir;
-    let inst;
-    inst <- iMem.resp.get();
-    $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
+		iMem.req.put(MemReq{op: Ld, addr: ppc, data: ?});
 
-    let dInst = decode(inst);
-    dInstR <= dInst;
-    // switch to execute state
-    state <= Execute;
-  endrule
+		epoch1 <= epoch0;
+	endrule
 
-  rule doExecute(cop.started && state == Execute);
-    let dInst = dInstR;
+	rule doDecode(cop.started && state == Decode);
+		if (epoch0 == epoch1) begin
+			let inst;
+			inst <- iMem.resp.get();
+			$display("epoch: %h", epoch1);
+			$display("ppc: %h inst: (%h) expanded: ", ppc, inst, showInst(inst));
 
-    let rVal1 = rf.rd1(validRegValue(dInst.src1));
-    let rVal2 = rf.rd2(validRegValue(dInst.src2));     
+			let dInst = decode(inst);
+			dInstR <= dInst;
+		end
+		// switch to execute state
+		state <= Execute;
+	endrule
 
-    let copVal = cop.rd(validRegValue(dInst.src1));
+	rule doExecute(cop.started && state == Execute);
+		if (epoch0 == epoch1) begin
+			let dInst = dInstR;
 
-    let eInst = exec(dInst, rVal1, rVal2, pc, ?, copVal);
+			let rVal1 = rf.rd1(validRegValue(dInst.src1));
+			let rVal2 = rf.rd2(validRegValue(dInst.src2));
 
-    if(eInst.iType == Unsupported)
-    begin
-      $fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", pc);
-      $finish;
-    end
+			let copVal = cop.rd(validRegValue(dInst.src1));
 
-    if(eInst.iType == Ld)
-    begin
-      dMem.req.put(MemReq{op: Ld, addr: eInst.addr, data: ?});
-    end
-    else if(eInst.iType == St)
-    begin
-      dMem.req.put(MemReq{op: St, addr: eInst.addr, data: eInst.data});
-    end
+			let eInst = exec(dInst, rVal1, rVal2, pc, ppc, copVal);
 
-    eInstR <= eInst;
-    state <= WriteBack;
-  endrule
+			if(eInst.iType == Unsupported)
+			begin
+				$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", pc);
+				$finish;
+			end
 
-  rule doWriteBack(cop.started && state == WriteBack);
-    let eInst = eInstR;
-    if(eInst.iType == Ld)
-    begin
-      eInst.data <- dMem.resp.get();
-    end
+			if(eInst.iType == Ld)
+			begin
+				dMem.req.put(MemReq{op: Ld, addr: eInst.addr, data: ?});
+			end
+			else if(eInst.iType == St)
+			begin
+				dMem.req.put(MemReq{op: St, addr: eInst.addr, data: eInst.data});
+			end
 
-    if (isValid(eInst.dst) && validValue(eInst.dst).regType == Normal)
-      rf.wr(validRegValue(eInst.dst), eInst.data);
+			eInstR <= eInst;
+		end
+		state <= WriteBack;
+	endrule
 
-    pc <= eInst.brTaken ? eInst.addr : pc + 4;
+	rule doWriteBack(cop.started && state == WriteBack);
+		if (epoch0 == epoch1) begin
+			let eInst = eInstR;
+			if(eInst.iType == Ld)
+			begin
+				eInst.data <- dMem.resp.get();
+			end
 
-    cop.wr(eInst.dst, eInst.data);
+			if (isValid(eInst.dst) && validValue(eInst.dst).regType == Normal) begin
+				rf.wr(validRegValue(eInst.dst), eInst.data);
+			end
 
-    // switch back to fetch
-    state <= Fetch;
-  endrule
-  
-  method ActionValue#(Tuple2#(RIndx, Data)) cpuToHost;
-    let ret <- cop.cpuToHost;
-    return ret;
-  endmethod
+			pc <= eInst.brTaken ? eInst.addr : pc + 4;
 
-  method Action hostToCpu(Bit#(32) startpc) if (!cop.started && memReady);
-    cop.start;
-    pc <= startpc;
-  endmethod
+			if (eInst.mispredict) begin
+				epoch0 <= epoch0 + 1;
+			end
 
-  interface MemInit iMemInit = iMem.init;
-  interface MemInit dMemInit = dMem.init;
+			cop.wr(eInst.dst, eInst.data);
+		end
+		state <= Decode;
+	endrule
+
+	method ActionValue#(Tuple2#(RIndx, Data)) cpuToHost;
+		let ret <- cop.cpuToHost;
+		return ret;
+	endmethod
+
+	method Action hostToCpu(Bit#(32) startpc) if (!cop.started && memReady);
+		cop.start;
+		pc <= startpc;
+	endmethod
+
+	interface MemInit iMemInit = iMem.init;
+	interface MemInit dMemInit = dMem.init;
 endmodule
-
