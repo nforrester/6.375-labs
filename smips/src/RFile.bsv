@@ -23,23 +23,39 @@ import Vector::*;
 import Ehr::*;
 
 interface RFile;
-    method Action wr( RIndx rindx, Data data );
-    method Data rd1( RIndx rindx );
-    method Data rd2( RIndx rindx );
+	method Action wr( RIndx rindx, Data data );
+	method Data rd1( RIndx rindx );
+	method Data rd2( RIndx rindx );
 endinterface
 
  (* synthesize *)
 module mkRFile( RFile );
-    Vector#(32, Reg#(Data)) rfile <- replicateM(mkReg(0));
+	Vector#(32, Reg#(Data)) rfile <- replicateM(mkReg(0));
 
-    function Data read(RIndx rindx);
-        return rfile[rindx];
-    endfunction
+	function Data read(RIndx rindx);
+		return rfile[rindx];
+	endfunction
    
-    method Action wr( RIndx rindx, Data data );
-        if(rindx!=0) rfile[rindx] <= data;
-    endmethod
+	method Action wr( RIndx rindx, Data data );
+		if(rindx!=0) rfile[rindx] <= data;
+	endmethod
 
-    method Data rd1( RIndx rindx ) = read(rindx);
-    method Data rd2( RIndx rindx ) = read(rindx);
+	method Data rd1( RIndx rindx ) = read(rindx);
+	method Data rd2( RIndx rindx ) = read(rindx);
+endmodule
+
+module mkBypassRFile( RFile );
+	Vector#(32, Ehr#(2, Data)) rfile <- replicateM(mkEhr(0));
+
+	method Action wr(RIndx rindx, Data data);
+		if (rindx != 0) begin
+			(rfile[rindx])[0] <= data;
+		end
+	endmethod
+
+	method Data rd1(RIndx rindx) =
+		(rfile[rindx])[1];
+
+	method Data rd2(RIndx rindx) =
+		(rfile[rindx])[1];
 endmodule
