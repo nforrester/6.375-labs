@@ -63,7 +63,7 @@ module [Module] mkProc(Proc);
 
 	Reg#(Epoch) epoch <-mkReg(1);
 
-	AddrPred addrPred <- mkPcPlus4;
+	AddrPred addrPred <- mkBtb;
 
 	Reg#(Addr) pcFetch <- mkRegU;
 	Reg#(Epoch) epochFetch <-mkReg(1);
@@ -153,6 +153,14 @@ module [Module] mkProc(Proc);
 
 				executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
 				sb.insert(executeData.eInst.dst);
+
+				Redirect redirect;
+				redirect.pc = decodeData.pc;
+				redirect.nextPc = executeData.eInst.addr;
+				redirect.brType = executeData.eInst.iType;
+				redirect.taken = executeData.eInst.brTaken;
+				redirect.mispredict = executeData.eInst.mispredict;
+				addrPred.update(redirect);
 
 				if (executeData.eInst.mispredict) begin
 					epoch <= epoch + 1;
