@@ -10,6 +10,7 @@ import Cop::*;
 import GetPut::*;
 import AddrPred::*;
 import FIFO::*;
+import Scoreboard::*;
 
 typedef UInt#(4) Epoch;
 
@@ -46,6 +47,15 @@ module [Module] mkProc(Proc);
 	IMemory   iMem <- mkIMemory;
 	DMemory   dMem <- mkDMemory;
 	Cop        cop <- mkCop;
+
+	/* This Scoreboard is too big for now, but should be safe.
+	 * It might need to be expanded later.
+	 * Being too small shouldn't cause incorrect behavior,
+	 * but it might cause rules to block inappropriately.
+	 * Being too big might impact performance,
+	 * but hopefully not on the critical path.
+	 */
+	Scoreboard#(5) sb <- mkPipelineScoreboard();
 
 	Reg#(Addr) pcJump <- mkRegU;
 
@@ -116,43 +126,57 @@ module [Module] mkProc(Proc);
 		end
 	endrule
 
+	Reg#(Maybe#(DecodeData)) executeHold <- mkReg(Invalid);
 	rule doExecute(cop.started);
 		DecodeData decodeData;
-		decodeData = executeFIFO.first();
-		executeFIFO.deq();
+
+		if (!isValid(executeHold)) begin
+			decodeData = executeFIFO.first();
+			executeFIFO.deq();
+		end else begin
+			decodeData = validValue(executeHold);
+		end
+
 		if (epoch == decodeData.epoch) begin
-			$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
-			ExecuteData executeData;
+			if (sb.search1(decodeData.dInst.src1) || sb.search2(decodeData.dInst.src2)) begin
+				executeHold <= Valid(decodeData);
+			end else begin
+				executeHold <= Invalid;
 
-			let rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
-			let rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
+				$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
+				ExecuteData executeData;
 
-			let copVal = cop.rd(validRegValue(decodeData.dInst.src1));
+				let rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
+				let rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
 
-			executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
+				let copVal = cop.rd(validRegValue(decodeData.dInst.src1));
 
-			if (executeData.eInst.mispredict) begin
-				epoch <= epoch + 1;
-				pcJump <= executeData.eInst.addr;
+				executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
+				sb.insert(executeData.eInst.dst);
+
+				if (executeData.eInst.mispredict) begin
+					epoch <= epoch + 1;
+					pcJump <= executeData.eInst.addr;
+				end
+
+				if(executeData.eInst.iType == Unsupported)
+				begin
+					$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", decodeData.pc, showInst(decodeData.inst));
+					$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", decodeData.pc);
+					$finish;
+				end
+
+				if(executeData.eInst.iType == Ld)
+				begin
+					dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
+				end
+				else if(executeData.eInst.iType == St)
+				begin
+					dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
+				end
+
+				writeBackFIFO.enq(executeData);
 			end
-
-			if(executeData.eInst.iType == Unsupported)
-			begin
-				$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", decodeData.pc, showInst(decodeData.inst));
-				$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", decodeData.pc);
-				$finish;
-			end
-
-			if(executeData.eInst.iType == Ld)
-			begin
-				dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
-			end
-			else if(executeData.eInst.iType == St)
-			begin
-				dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
-			end
-
-			writeBackFIFO.enq(executeData);
 		end
 	endrule
 
@@ -171,6 +195,7 @@ module [Module] mkProc(Proc);
 		end
 
 		cop.wr(executeData.eInst.dst, executeData.eInst.data);
+		sb.remove();
 	endrule
 
 	method ActionValue#(Tuple2#(RIndx, Data)) cpuToHost;
