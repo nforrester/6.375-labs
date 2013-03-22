@@ -55,7 +55,7 @@ module [Module] mkProc(Proc);
 	 * Being too big might impact performance,
 	 * but hopefully not on the critical path.
 	 */
-	Scoreboard#(5) sb <- mkPipelineScoreboard();
+	Scoreboard#(8) sb <- mkPipelineScoreboard();
 
 	Reg#(Addr) pcJump <- mkRegU;
 
