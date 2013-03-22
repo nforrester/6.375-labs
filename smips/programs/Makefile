@@ -17,6 +17,7 @@ build/qsort.bench.exe: src/qsort/qsort_main.c
 build/towers.bench.exe: src/towers/towers_main.c
 build/vvadd.bench.exe: src/vvadd/vvadd_main.c
 
+build/forceRAW.asm.exe:            src/assembly/forceRAW.S
 build/smipsv1_addiu.asm.exe:       src/assembly/smipsv1_addiu.S
 build/smipsv1_bne.asm.exe:         src/assembly/smipsv1_bne.S
 build/smipsv1_lw.asm.exe:          src/assembly/smipsv1_lw.S
