@@ -11,8 +11,6 @@ import GetPut::*;
 import AddrPred::*;
 import FIFO::*;
 
-typedef enum {Decode, Execute, WriteBack} State deriving (Bits, Eq);
-
 typedef UInt#(4) Epoch;
 
 typedef struct {
@@ -50,8 +48,6 @@ module [Module] mkProc(Proc);
 	Cop        cop <- mkCop;
 
 	Reg#(Addr) pcJump <- mkRegU;
-
-	Reg#(State) state <- mkReg(Decode);
 
 	Bool memReady = iMem.init.done() && dMem.init.done();
 
@@ -103,7 +99,7 @@ module [Module] mkProc(Proc);
 		$display("FETCHresp: epoch: %h pc: %h ppc: %h", fetchData.epoch, fetchData.pc, fetchData.ppc);
 	endrule
 
-	rule doDecode(cop.started && state == Decode);
+	rule doDecode(cop.started);
 		FetchData fetchData;
 		fetchData = decodeFIFO.first();
 		decodeFIFO.deq();
@@ -117,52 +113,50 @@ module [Module] mkProc(Proc);
 			decodeData.dInst = decode(fetchData.inst);
 			decodeData.inst = fetchData.inst;
 			executeFIFO.enq(decodeData);
-
-			state <= Execute;
 		end
 	endrule
 
-	rule doExecute(cop.started && state == Execute);
+	rule doExecute(cop.started);
 		DecodeData decodeData;
 		decodeData = executeFIFO.first();
 		executeFIFO.deq();
-		$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
-		ExecuteData executeData;
+		if (epoch == decodeData.epoch) begin
+			$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
+			ExecuteData executeData;
 
-		let rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
-		let rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
+			let rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
+			let rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
 
-		let copVal = cop.rd(validRegValue(decodeData.dInst.src1));
+			let copVal = cop.rd(validRegValue(decodeData.dInst.src1));
 
-		executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
+			executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
 
-		if (executeData.eInst.mispredict) begin
-			epoch <= epoch + 1;
-			pcJump <= executeData.eInst.addr;
+			if (executeData.eInst.mispredict) begin
+				epoch <= epoch + 1;
+				pcJump <= executeData.eInst.addr;
+			end
+
+			if(executeData.eInst.iType == Unsupported)
+			begin
+				$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", decodeData.pc, showInst(decodeData.inst));
+				$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", decodeData.pc);
+				$finish;
+			end
+
+			if(executeData.eInst.iType == Ld)
+			begin
+				dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
+			end
+			else if(executeData.eInst.iType == St)
+			begin
+				dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
+			end
+
+			writeBackFIFO.enq(executeData);
 		end
-
-		if(executeData.eInst.iType == Unsupported)
-		begin
-			$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", decodeData.pc, showInst(decodeData.inst));
-			$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", decodeData.pc);
-			$finish;
-		end
-
-		if(executeData.eInst.iType == Ld)
-		begin
-			dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
-		end
-		else if(executeData.eInst.iType == St)
-		begin
-			dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
-		end
-
-		writeBackFIFO.enq(executeData);
-
-		state <= WriteBack;
 	endrule
 
-	rule doWriteBack(cop.started && state == WriteBack);
+	rule doWriteBack(cop.started);
 		ExecuteData executeData;
 		executeData = writeBackFIFO.first();
 		writeBackFIFO.deq();
@@ -177,7 +171,6 @@ module [Module] mkProc(Proc);
 		end
 
 		cop.wr(executeData.eInst.dst, executeData.eInst.data);
-		state <= Decode;
 	endrule
 
 	method ActionValue#(Tuple2#(RIndx, Data)) cpuToHost;
