@@ -3,7 +3,7 @@
 for x in ../../programs/build/*.asm.vmh ; do
     echo $x
     sleep 1
-    ./tb $x
+    runtb ./tb $x
     sleep 1
 done
 

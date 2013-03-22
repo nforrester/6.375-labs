@@ -1,4 +1,3 @@
-
 import GetPut::*;
 
 import Types::*;
@@ -34,4 +33,3 @@ interface MemInitIfc;
   interface Put#(MemInit) request;
   method Bool done();
 endinterface
-
