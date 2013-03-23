@@ -38,6 +38,19 @@ typedef struct {
 } DecodeData deriving (Bits);
 
 typedef struct {
+	Addr pc;
+	Addr ppc;
+	Epoch epoch;
+	DecodedInst dInst;
+	Data rVal1;
+	Data rVal2;
+	Data copVal;
+
+	// TODO: DEBUGGING
+	Data inst;
+} RegFetchData deriving (Bits);
+
+typedef struct {
 	ExecInst eInst;
 } ExecuteData deriving (Bits);
 
@@ -70,7 +83,8 @@ module [Module] mkProc(Proc);
 
 	FIFO#(FetchReqData) fetchRespFIFO <- mkFIFO();
 	FIFO#(FetchData) decodeFIFO <- mkFIFO();
-	FIFO#(DecodeData) executeFIFO <- mkFIFO();
+	FIFO#(DecodeData) regFetchFIFO <- mkFIFO();
+	FIFO#(RegFetchData) executeFIFO <- mkFIFO();
 	FIFO#(ExecuteData) writeBackFIFO <- mkFIFO();
 
 	rule doFetchReq(cop.started);
@@ -122,69 +136,98 @@ module [Module] mkProc(Proc);
 			decodeData.epoch = fetchData.epoch;
 			decodeData.dInst = decode(fetchData.inst);
 			decodeData.inst = fetchData.inst;
-			executeFIFO.enq(decodeData);
+			regFetchFIFO.enq(decodeData);
 		end
 	endrule
 
-	Reg#(Maybe#(DecodeData)) executeHold <- mkReg(Invalid);
-	rule doExecute(cop.started);
+	Reg#(Maybe#(DecodeData)) regFetchHold <- mkReg(Invalid);
+	Reg#(Maybe#(FullIndx)) tempSB <- mkReg(Invalid);
+	rule doRegFetch(cop.started);
 		DecodeData decodeData;
 
-		if (!isValid(executeHold)) begin
-			decodeData = executeFIFO.first();
-			executeFIFO.deq();
+		if (!isValid(regFetchHold)) begin
+			decodeData = regFetchFIFO.first();
+			regFetchFIFO.deq();
 		end else begin
-			decodeData = validValue(executeHold);
+			decodeData = validValue(regFetchHold);
 		end
 
 		if (epoch == decodeData.epoch) begin
-			if (sb.search1(decodeData.dInst.src1) || sb.search2(decodeData.dInst.src2)) begin
-				executeHold <= Valid(decodeData);
-			end else begin
-				executeHold <= Invalid;
-
-				$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
-				ExecuteData executeData;
-
-				let rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
-				let rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
-
-				let copVal = cop.rd(validRegValue(decodeData.dInst.src1));
-
-				executeData.eInst = exec(decodeData.dInst, rVal1, rVal2, decodeData.pc, decodeData.ppc, copVal);
-				sb.insert(executeData.eInst.dst);
-
-				Redirect redirect;
-				redirect.pc = decodeData.pc;
-				redirect.nextPc = executeData.eInst.addr;
-				redirect.brType = executeData.eInst.iType;
-				redirect.taken = executeData.eInst.brTaken;
-				redirect.mispredict = executeData.eInst.mispredict;
-				addrPred.update(redirect);
-
-				if (executeData.eInst.mispredict) begin
-					epoch <= epoch + 1;
-					pcJump <= executeData.eInst.addr;
+			Bool inTempSB = False;
+			if (isValid(tempSB)) begin
+				if (isValid(decodeData.dInst.src1)) begin
+					inTempSB = validValue(tempSB) == validValue(decodeData.dInst.src1);
 				end
-
-				if(executeData.eInst.iType == Unsupported)
-				begin
-					$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", decodeData.pc, showInst(decodeData.inst));
-					$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", decodeData.pc);
-					$finish;
+				if (isValid(decodeData.dInst.src2)) begin
+					inTempSB = inTempSB || (validValue(tempSB) == validValue(decodeData.dInst.src2));
 				end
-
-				if(executeData.eInst.iType == Ld)
-				begin
-					dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
-				end
-				else if(executeData.eInst.iType == St)
-				begin
-					dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
-				end
-
-				writeBackFIFO.enq(executeData);
 			end
+			if (sb.search1(decodeData.dInst.src1) || sb.search2(decodeData.dInst.src2) || inTempSB) begin
+				regFetchHold <= Valid(decodeData);
+				tempSB <= Invalid;
+			end else begin
+				regFetchHold <= Invalid;
+
+				$display("REG FETCH: epoch: %h pc: %h ppc: %h inst: ", decodeData.epoch, decodeData.pc, decodeData.ppc, showInst(decodeData.inst));
+
+				tempSB <= decodeData.dInst.dst;
+
+				RegFetchData regFetchData;
+				regFetchData.rVal1 = rf.rd1(validRegValue(decodeData.dInst.src1));
+				regFetchData.rVal2 = rf.rd2(validRegValue(decodeData.dInst.src2));
+				regFetchData.copVal = cop.rd(validRegValue(decodeData.dInst.src1));
+				regFetchData.pc = decodeData.pc;
+				regFetchData.ppc = decodeData.ppc;
+				regFetchData.epoch = decodeData.epoch;
+				regFetchData.dInst = decodeData.dInst;
+				regFetchData.inst = decodeData.inst;
+				executeFIFO.enq(regFetchData);
+			end
+		end
+	endrule
+
+	rule doExecute(cop.started);
+		RegFetchData regFetchData;
+		regFetchData = executeFIFO.first();
+		executeFIFO.deq();
+
+		if (epoch == regFetchData.epoch) begin
+			$display("EXECUTE: epoch: %h pc: %h ppc: %h inst: ", regFetchData.epoch, regFetchData.pc, regFetchData.ppc, showInst(regFetchData.inst));
+
+			ExecuteData executeData;
+			executeData.eInst = exec(regFetchData.dInst, regFetchData.rVal1, regFetchData.rVal2, regFetchData.pc, regFetchData.ppc, regFetchData.copVal);
+			sb.insert(executeData.eInst.dst);
+
+			Redirect redirect;
+			redirect.pc = regFetchData.pc;
+			redirect.nextPc = executeData.eInst.addr;
+			redirect.brType = executeData.eInst.iType;
+			redirect.taken = executeData.eInst.brTaken;
+			redirect.mispredict = executeData.eInst.mispredict;
+			addrPred.update(redirect);
+
+			if (executeData.eInst.mispredict) begin
+				epoch <= epoch + 1;
+				pcJump <= executeData.eInst.addr;
+			end
+
+			if(executeData.eInst.iType == Unsupported)
+			begin
+				$display("Executing unsupported instruction at pc: %x. Exiting. Expanded: ", regFetchData.pc, showInst(regFetchData.inst));
+				$fwrite(stderr, "Executing unsupported instruction at pc: %x. Exiting\n", regFetchData.pc);
+				$finish;
+			end
+
+			if(executeData.eInst.iType == Ld)
+			begin
+				dMem.req.put(MemReq{op: Ld, addr: executeData.eInst.addr, data: ?});
+			end
+			else if(executeData.eInst.iType == St)
+			begin
+				dMem.req.put(MemReq{op: St, addr: executeData.eInst.addr, data: executeData.eInst.data});
+			end
+
+			writeBackFIFO.enq(executeData);
 		end
 	endrule
 
