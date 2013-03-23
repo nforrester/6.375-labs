@@ -56,7 +56,7 @@ typedef struct {
 
 (* synthesize *)
 module [Module] mkProc(Proc);
-	RFile       rf <- mkBypassRFile;
+	RFile       rf <- mkRFile;
 	IMemory   iMem <- mkIMemory;
 	DMemory   dMem <- mkDMemory;
 	Cop        cop <- mkCop;
