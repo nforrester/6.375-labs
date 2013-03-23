@@ -1,0 +1,31 @@
+1. median     0.60
+   multiply   0.69
+   qsort      0.63
+   towers     0.75
+   vvadd      0.82
+
+2. All the non-scoreboard FIFOs are of whatever the default size is (I've heard 2).
+   I chose this because it doesn't seem to be terribly important. Increasing it might
+   increase IPS somewhat, but I didn't have time to investigate this.
+
+   The scoreboard is of size 8. I picked it because it was big enough. Making it smaller
+   might be better. I haven't investigated this due to lack of time.
+   I used a pipeline scoreboard, so that instructions are released as soon as the data
+   hazard is resolved, and not one cycle later.
+
+   I used a bypass register file. It increased IPC dramatically relative to non-bypassed,
+   but did not decrease the maximum frequency much.
+   
+   The logical order of the pipeline stages is:
+
+     doFetchReq
+     doFetchResp
+     doDecode
+     doWriteBack
+     doRegFetch
+     doExecute
+
+3. IPS with bypassed (multiply benchmark)        0.69 IPC * 113 MHz = 78 MIPS
+   IPS with non-bypassed (multiply benchmark)    0.41 IPC * 123 MHz = 50 MIPS
+
+   Bypassing improves real performance dramatically, because IPC goes way up.
